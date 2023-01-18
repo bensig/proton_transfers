@@ -5,22 +5,22 @@ import pandas as pd
 
 from models import dbcon
 
-node_url = 'https://proton.greymass.com'
+node_url = 'https://api.libre.eossweden.org'
 
 class Account_Transfers:
     def __init__(self, account):
         self.account = account
 
-    def extract_json(self, pos, offset):
+    def extract_json(self, pos, offset, sort):
         url = '{}/v1/history/get_actions'.format(node_url)
         params = {'account_name': self.account,
-                'pos': pos, 'offset': offset}#, 'filter-on':'receiver:action:actor'}
+                'pos': pos, 'offset': offset, 'sort': sort}#, 'filter-on':'receiver:action:actor'}
 
         r = requests.request("POST", url, json=params)
         d = json.loads(r.text)
 
         df = Account_Transfers.parse_account_json(self, d)
-        #df.to_csv('test.csv', index=False)
+        df.to_csv('test.csv', index=False)
         return df
 
     #store in SQLite DB
@@ -29,7 +29,6 @@ class Account_Transfers:
         #like actual from cleos
         last_action_actual = int(Account_Transfers.last_account_action(self))
         last_action_db = int(Account_Transfers.get_last_action_db(self))
-
 
         #this is where i need to fix the thing
         while last_action_db <= last_action_actual:
@@ -44,7 +43,7 @@ class Account_Transfers:
 
 
             #think if I adjust the extract_json last param it will go faster
-            df = Account_Transfers.extract_json(self, last_action_db, +100)
+            df = Account_Transfers.extract_json(self, last_action_db, +100, "asc")
             df = df.drop_duplicates(subset=['global_action_seq','trx_id', 'quantity', 'memo'])
             df.to_sql('actions', dbcon, if_exists='append', index=False)
             last_action_db = int(Account_Transfers.get_last_action_db(self))
@@ -65,8 +64,9 @@ class Account_Transfers:
 
     #Get last account action so we loop up to there
     def last_account_action(self):
-        last_action = Account_Transfers.extract_json(self, -1, -1)#['actions']['account_action_seq']
-
+        last_action = Account_Transfers.extract_json(self, -1, -1, "desc")#['actions']['account_action_seq']
+        print ("account action seq")
+        print (last_action)
         return last_action['account_action_seq'][0]
 
 
